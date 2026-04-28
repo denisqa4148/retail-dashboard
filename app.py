@@ -3,7 +3,7 @@ import pandas as pd
 
 
 # --- Параметры: ПУТЬ к CSV в Google Drive ---
-DATA_PATH = "/content/drive/MyDrive/retail_dashboard/data/retail_aggregated.csv"
+DATA_PATH = "data/retail_aggregated.csv"
 
 
 # --- Загрузка данных ---
