@@ -9,7 +9,7 @@ DATA_PATH = "data/retail_aggregated.csv"
 def load_data():
     try:
         df = pd.read_csv(DATA_PATH, encoding="utf-8", low_memory=False)
-        # Числа через запятую -> точки -> float
+        # Числа с запятой -> точки -> float
         numeric_cols = df.select_dtypes(include="object").columns
         for col in numeric_cols:
             if df[col].astype(str).str.contains(",", regex=False).any():
@@ -23,7 +23,7 @@ def load_data():
 df = load_data()
 
 
-# --- Стиль: лайтовый, плавные анимации, но без пульсации KPI ---
+# --- Стиль: лайтовый, плавные анимации, без пульсации KPI ---
 st.markdown("""
 <style>
     /* Общий фон и типографика */
@@ -33,16 +33,16 @@ st.markdown("""
         transition: background 0.3s ease;
     }
 
-    /* Плавное появление всего контента */
-    .stApp > div {
+    /* Плавное появление блоков */
+    .section-block {
         opacity: 0;
-        animation: fadeIn 0.8s ease-out forwards;
+        animation: fadeInSection 0.8s ease-out 0.1s forwards;
     }
 
-    @keyframes fadeIn {
+    @keyframes fadeInSection {
         from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(12px);
         }
         to {
             opacity: 1;
@@ -60,7 +60,7 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.92) !important;
     }
 
-    /* Виджеты — лайтовые, с hover*/
+    /* Виджеты — лайтовые, с hover */
     .stRadio > div,
     .stSelectbox > div,
     .stMultiSelect > div {
@@ -79,7 +79,7 @@ st.markdown("""
         background: rgba(245, 248, 255, 0.97);
     }
 
-    /* Метрики — без пульсации, но с hover */
+    /* Метрики — без анимации, но hover */
     .stMetric p {
         font-size: 15px;
         color: #444;
@@ -96,10 +96,10 @@ st.markdown("""
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
     }
 
-    /* Графики — плавные, без перегруза */
+    /* Графики — плавное появление */
     .plotly-graph-div {
         opacity: 0;
-        animation: fadeInGraph 0.6s ease 0.1s forwards;
+        animation: fadeInGraph 0.7s ease 0.1s forwards;
     }
 
     @keyframes fadeInGraph {
@@ -135,17 +135,46 @@ st.markdown("""
 
 
 # --- Заголовок ---
-st.title("✨ BI‑Дашборд розничной сети (витрина для руководителя)")
+st.title("✨ BI‑Дашборд розничной сети (панельный режим)")
 
 
-# --- Вкладки приложения ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📈 Обзор сети",
-    "📉 Динамика по месяцам",
-    "📊 Сравнение ТО",
-    "🔍 Детализация по ТО",
-    "💡 Рекомендации"
-])
+# --- Функция подсказок ---
+def generate_insights(df, metric, value, total_avg, store="ТО", threshold=0.8):
+    insight = f"<div class='suggestion-box'><div class='suggestion-title'>💡 Рекомендация для ТО: {store}</div>"
+
+    # Рентабельность
+    if "Рентабельность 1" in metric or "рентабельность" in metric.lower():
+        if value < total_avg * threshold:
+            insight += "Рентабельность ниже средней. Проверьте себестоимость, расходы и маржинальность."
+        else:
+            insight += "Рентабельность в норме. Следите за динамикой."
+
+    # Выручка
+    elif "Выручка" in metric:
+        if value < total_avg * threshold:
+            insight += "Выручка ниже средней. Проверьте трафик и конверсию."
+        else:
+            insight += "Выручка в норме. Следите за маржой и ценовой политикой."
+
+    # ФОТ
+    elif "ФОТ" in metric:
+        if value > total_avg * 1.2:
+            insight += "ФОТ завышен. Проверьте численность персонала и часы работы."
+        else:
+            insight += "ФОТ в норме. Следите, чтобы рос с выручкой и не превышал допустимый уровень."
+
+    # Маржа
+    elif "Марж" in metric or "маржинальная" in metric.lower():
+        if value < total_avg * threshold:
+            insight += "Маржинальная прибыль ниже средней. Сравните структуру товарных групп."
+        else:
+            insight += "Маржинальная прибыль в норме. Следите за списаниями."
+
+    else:
+        insight += "Метрика в норме. Следите за динамикой по месяцам."
+
+    insight += "</div>"
+    return insight
 
 
 # --- Фильтры в боковой панели ---
@@ -174,45 +203,6 @@ with st.sidebar:
         st.warning("Выберите хотя бы одно ТО.")
 
 
-# --- Функция подсказок по метрикам ---
-def generate_insights(df, metric, value, total_avg, store="ТО", threshold=0.8):
-    insight = f"<div class='suggestion-box'><div class='suggestion-title'>💡 Рекомендация для ТО: {store}</div>"
-
-    # Рентабельность
-    if "Рентабельность 1" in metric or "рентабельность" in metric.lower():
-        if value < total_avg * threshold:
-            insight += f"Рентабельность ниже средней по сети. Проверьте маржинальность, себестоимость и расходы (ФОТ, логистика, аренда)."
-        else:
-            insight += "Рентабельность в норме. Следите за динамикой и структурой продаж."
-
-    # Выручка
-    elif "Выручка" in metric:
-        if value < total_avg * threshold:
-            insight += "Выручка ниже средней. Проверьте трафик, конверсию, средний чек и промо‑активность."
-        else:
-            insight += "Выручка в норме. Следите за маржой и ценовой политикой."
-
-    # ФОТ
-    elif "ФОТ" in metric:
-        if value > total_avg * 1.2:
-            insight += "Доля ФОТ в выручке завышена. Проверьте численность персонала, часы работы и KPI‑магазина."
-        else:
-            insight += "ФОТ в допустимом диапазоне. Следите за синхронностью роста выручки и ФОТ."
-
-    # Маржа
-    elif "Марж" in metric or "маржинальная" in metric.lower():
-        if value < total_avg * threshold:
-            insight += "Маржинальная прибыль ниже средней. Сравните доли проды, скоропорта и непроды."
-        else:
-            insight += "Маржинальная прибыль в норме. Следите за списаниями и структурой закупок."
-
-    else:
-        insight += "Метрика в норме. Следите за динамикой по месяцам."
-
-    insight += "</div>"
-    return insight
-
-
 # --- Фильтрация данных ---
 data = df.copy()
 if len(selected_stores) > 0:
@@ -225,93 +215,147 @@ if selected_type != "Все":
     data = data[data["Тип ТО"] == selected_type]
 
 
-# --- Вкладка 1: Обзор сети ---
-with tab1:
+# --- Список секций (как панели) ---
+panel_options = [
+    "📈 Обзор сети",
+    "📉 Динамика по месяцам",
+    "📊 Сравнение ТО",
+    "🔍 Детализация по ТО",
+    "💡 Рекомендации"
+]
+
+# --- Выбор панели ─ как навигация между страницами/панелями ---
+selected_panel = st.sidebar.radio(
+    "Выберите панель",
+    panel_options,
+    key="panel_selector"
+)
+
+# --- Секция 1: Обзор сети ---
+if selected_panel == "📈 Обзор сети":
+    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
+    st.markdown("### 📊 Обзор сети")
+
     if len(data) == 0:
         st.info("Нет данных по выбранным фильтрам.")
     else:
-        st.markdown("### 📊 Обзор по всей сети (ТО)")
-        metrics_list = [
+        core_metrics = [
             "Выручка б/НДС",
             "Себестоимость б/ндс",
             "Марж прибыль",
             "Рентабельность 1",
             "Доля ФОТ в выручке, %"
         ]
-        total_avg = data[metrics_list[0]].mean()
-        total = data[metrics_list[0]].sum()
+        total = data[core_metrics[0]].sum()
+        total_avg = data[core_metrics[0]].mean()
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Суммарная выручка", f"{total:,.2f}")
         col2.metric("Средняя выручка по ТО", f"{total_avg:,.2f}")
         col3.metric("Количество ТО", f"{len(data['ТО'].unique())}")
 
-        # Барчарт
-        by_store = data.groupby("ТО", as_index=False)["Выручка б/НДС"].sum()
+        by_store = data.groupby("ТО", as_index=False)[core_metrics[0]].sum()
         st.bar_chart(by_store.set_index("ТО"))
 
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Вкладка 2: Динамика по месяцам ---
-with tab2:
+
+# --- Секция 2: Динамика по месяцам ---
+if selected_panel == "📉 Динамика по месяцам":
+    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
+    st.markdown("### 📈 Динамика по месяцам")
+
     if len(data) == 0:
         st.info("Нет данных по выбранным фильтрам.")
     else:
-        st.markdown("### 📈 Динамика по месяцам")
-        st.markdown("Выберите метрику:")
-        metric = st.selectbox("Метрика", metrics_list, key="dyn_metric")
+        metric = st.selectbox("Метрика", [
+            "Выручка б/НДС",
+            "Себестоимость б/ндс",
+            "Марж прибыль",
+            "Рентабельность 1",
+            "Доля ФОТ в выручке, %"
+        ], key="dyn_metric")
 
         by_month = data.groupby("Месяц", as_index=False)[metric].sum()
         st.line_chart(by_month.set_index("Месяц"))
 
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Вкладка 3: Сравнение ТО ---
-with tab3:
+
+# --- Секция 3: Сравнение ТО ---
+if selected_panel == "📊 Сравнение ТО":
+    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
+    st.markdown("### 📊 Сравнение выбранных ТО")
+
     if len(data) == 0:
         st.info("Нет данных по выбранным фильтрам.")
     else:
-        st.markdown("### 📊 Сравнение выбранных ТО по метрикам")
-        selected_metric = st.selectbox("Выберите метрику для сравнения", metrics_list, key="comp_metric")
+        selected_metric = st.selectbox("Метрика", [
+            "Выручка б/НДС",
+            "Себестоимость б/ндс",
+            "Марж прибыль",
+            "Рентабельность 1",
+            "Доля ФОТ в выручке, %"
+        ], key="comp_metric")
 
         by_store = data.groupby("ТО", as_index=False)[selected_metric].sum()
         st.bar_chart(by_store.set_index("ТО"))
 
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Вкладка 4: Детализация по ТО ---
-with tab4:
+
+# --- Секция 4: Детализация по ТО ---
+if selected_panel == "🔍 Детализация по ТО":
+    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
+    st.markdown("### 🔍 Детализация по одному ТО")
+
     if len(data) == 0:
         st.info("Нет данных по выбранным фильтрам.")
     else:
-        st.markdown("### 🔍 Детализация по одному ТО")
-
         selected_store = st.selectbox("ТО", all_stores, key="detail_store")
 
         store_data = data[data["ТО"] == selected_store]
         if len(store_data) == 0:
             st.info("Нет данных для выбранного ТО.")
         else:
-            st.dataframe(store_data[["Месяц"] + metrics_list].round(2), height=400)
+            st.dataframe(store_data[["Месяц"] + [
+                "Выручка б/НДС",
+                "Себестоимость б/ндс",
+                "Марж прибыль",
+                "Рентабельность 1",
+                "Доля ФОТ в выручке, %"
+            ]].round(2), height=400)
+
             st.markdown("---")
 
-            # Подсказки для этого ТО
+            # Подсказки по метрикам для этого ТО
             total_avg = store_data["Выручка б/НДС"].mean()
-            for metric in ["Выручка б/НДС", "Рентабельность 1", "Доля ФОТ в выручке, %", "Марж прибыль"]:
+            for metric in ["Выручка б/НДС", "Рентабельность 1", "Марж прибыль"]:
                 value = store_data[metric].sum()
                 st.markdown(
                     generate_insights(df, metric, value, total_avg, store=selected_store),
                     unsafe_allow_html=True
                 )
 
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Вкладка 5: Рекомендации (аналитик) ---
-with tab5:
+
+# --- Секция 5: Рекомендации (Аналитик) ---
+if selected_panel == "💡 Рекомендации":
+    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
     st.markdown("### 💡 Рекомендации по метрикам")
 
     if len(selected_stores) == 0:
         st.info("Выберите хотя бы одно ТО в боковой панели.")
     else:
-        selected_metric = st.selectbox("Метрика для анализа", metrics_list, key="rec_metric")
+        selected_metric = st.selectbox("Метрика для анализа", [
+            "Выручка б/НДС",
+            "Себестоимость б/ндс",
+            "Марж прибыль",
+            "Рентабельность 1",
+            "Доля ФОТ в выручке, %"
+        ], key="rec_metric")
 
-        total = data[selected_metric].sum()
         total_avg = data[selected_metric].mean()
 
         for store in selected_stores:
@@ -321,3 +365,5 @@ with tab5:
                 generate_insights(df, selected_metric, value, total_avg, store),
                 unsafe_allow_html=True
             )
+
+    st.markdown("</div>", unsafe_allow_html=True)
