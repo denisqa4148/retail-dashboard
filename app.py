@@ -4,67 +4,160 @@ import pandas as pd
 
 # --- Параметры ---
 DATA_PATH = "data/retail_aggregated.csv"
+
 @st.cache_data
 def load_data():
     try:
         df = pd.read_csv(DATA_PATH, encoding="utf-8", low_memory=False)
+        # Приводим столбцы с числами через запятую к float
         numeric_cols = df.select_dtypes(include="object").columns
         for col in numeric_cols:
             if df[col].astype(str).str.contains(",", regex=False).any():
                 df[col] = df[col].astype(str).str.replace(",", ".").astype(float, errors="ignore")
         return df
     except FileNotFoundError:
-        st.error(f"Файл {DATA_PATH} не найден. Проверьте путь в репозитории.")
+        st.error(f"Файл {DATA_PATH} не найден. Проверьте, что он лежит в папке `data/` репозитория.")
         st.stop()
 
 
 df = load_data()
 
 
-# --- Стиль (лайтовый, полупрозрачный, белый фон) ---
+# --- Стиль: лайтовый, полупрозрачный, анимированный ---
 st.markdown("""
 <style>
+    /* Общий фон и типографика */
     .stApp {
         background: #ffffff;
         font-family: 'Segoe UI', 'Roboto', sans-serif;
+        transition: background 0.3s ease;
     }
 
-    .css-1l02zno { background: rgba(255, 255, 255, 0.85) !important; }
-    .css-1d391kg { background: rgba(255, 255, 255, 0.85) !important; }
+    /* Плавное появление всего контента */
+    .stApp > div {
+        opacity: 0;
+        animation: fadeIn 0.8s ease-out forwards;
+    }
 
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Боковая панель — лёгкая, полупрозрачная */
+    .css-1l02zno {
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(4px);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .css-1d391kg {
+        background: rgba(255, 255, 255, 0.92) !important;
+    }
+
+    /* Виджеты (selectbox, radio, multiselect) — лайтовые, с hover‑анимацией */
     .stRadio > div,
     .stSelectbox > div,
     .stMultiSelect > div {
-        background: rgba(248, 249, 250, 0.95);
-        border-radius: 8px;
-        padding: 8px;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        background: rgba(248, 249, 250, 0.97);
+        border-radius: 10px;
+        padding: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
 
+    .stRadio > div:hover,
+    .stSelectbox > div:hover,
+    .stMultiSelect > div:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+        background: rgba(245, 248, 255, 0.97);
+    }
+
+    /* Метрики — плавные, с лёгким пульсированием */
     .stMetric p {
-        font-size: 15px;
+        font-size: 16px;
         color: #444;
     }
+
     .stMetric div {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: 600;
         color: #1976d2;
+        animation: pulse 4s infinite ease-in-out;
     }
 
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.03);
+            filter: drop-shadow(0 4px 6px rgba(0, 120, 255, 0.15));
+        }
+    }
+
+    /* Графики — появляются плавно */
+    .plotly-graph-div {
+        opacity: 0;
+        animation: fadeInGraph 0.7s ease 0.2s forwards;
+    }
+
+    @keyframes fadeInGraph {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Подсказки — мягкая анимация появления */
     .suggestion-box {
-        background: rgba(240, 248, 255, 0.75);
-        padding: 12px;
-        border-radius: 8px;
+        background: rgba(240, 248, 255, 0.8);
+        padding: 14px;
+        border-radius: 10px;
         border: 1px solid #e0e0e0;
-        margin: 8px 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin: 10px 0;
         font-size: 14px;
         color: #333;
+        animation: suggestIn 0.6s ease-out;
+    }
+
+    @keyframes suggestIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
     }
 
     .suggestion-title {
         font-weight: 600;
         color: #1976d2;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+    }
+
+    /* Лёгкий hover на карточки и подсказки */
+    .stMetric, .suggestion-box, .stColumn {
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stMetric:hover, .suggestion-box:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,7 +166,7 @@ st.markdown("""
 # --- Заголовок ---
 st.title("✨ Дашборд розничной сети (лайтовый)")
 
-# --- Выбор ТО ---
+# Упорядочим столбец "ТО"
 st.markdown("### 👥 **Сравниваются ТО**")
 all_stores = sorted(df["ТО"].dropna().unique().tolist())
 selected_stores = st.multiselect(
@@ -82,36 +175,41 @@ selected_stores = st.multiselect(
     default=all_stores[:3] if all_stores else []
 )
 
-# --- Функция подсказок ---
+
+# --- Логика генерации подсказок с решениями ---
 def generate_insights(df, store, metric, value, total_avg, threshold=0.8):
     insight = "<div class='suggestion-box'><div class='suggestion-title'>💡 Рекомендации для ТО: {0}</div>".format(store)
 
+    # Рентабельность
     if "Рентабельность 1" in metric or "рентабельность" in metric.lower():
         if value < total_avg * threshold:
-            insight += f"Рентабельность ниже средней. Проверьте выручку и ФОТ, возможно, расходы завышены."
+            insight += f"Рентабельность ниже средней по сети. Проверьте выручку, себестоимость и расходы на реализацию (ФОТ, логистика, аренда)."
         else:
-            insight += f"Рентабельность в норме. Следите за динамикой."
+            insight += "Рентабельность в норме. Следите за динамикой по месяцам и структурой продаж."
 
+    # Выручка
     elif "Выручка" in metric:
         if value < total_avg * threshold:
-            insight += f"Выручка ниже средней. Проверьте трафик и конверсию, возможно, снижение посещений."
+            insight += "Выручка ниже средней. Проверьте трафик, конверсию и средний чек, возможно, снизилась посещаемость или промо‑активность."
         else:
-            insight += f"Выручка в норме. Следите за маржой."
+            insight += "Выручка в норме. Следите за маржой и структурой товарных групп, чтобы не снижать рентабельность."
 
+    # ФОТ
     elif "ФОТ" in metric:
         if value > total_avg * 1.2:
-            insight += "ФОТ завышен. Проверьте часы работы и состав персонала."
+            insight += "Доля ФОТ в выручке завышена. Проверьте часы работы, оптимальность численности персонала и KPI‑магазина."
         else:
-            insight += "ФОТ в норме."
+            insight += "ФОТ в допустимом диапазоне. Следите, чтобы при росте выручки он не рос быстрее её."
 
+    # Маржа / маржинальная прибыль
     elif "Марж" in metric or "маржинальная" in metric.lower():
         if value < total_avg * threshold:
-            insight += "Маржинальная прибыль низкая. Сравните проды/скоропорт/непроды."
+            insight += "Маржинальная прибыль ниже средней. Сравните долю проды, скоропорта и непроды; возможно, низкомаржинальные группы доминируют."
         else:
-            insight += "Маржинальная прибыль в норме. Следите за динамикой."
+            insight += "Маржинальная прибыль в норме. Следите за списаниями и структурой закупок."
 
     else:
-        insight += "Метрика в норме. Следите за изменениями по месяцам."
+        insight += "Метрика в норме. Следите за динамикой по месяцам и сравнением с другими ТО."
 
     insight += "</div>"
     return insight
@@ -129,23 +227,34 @@ with st.sidebar:
         "Доля ФОТ в выручке, %"
     ]
 
+    # Основная метрика — в виде радио‑кнопок
     selected_metric = st.radio("Основная метрика", core_metrics, index=0)
-    secondary_metric = st.selectbox("Дополнительная метрика", df.select_dtypes(include="number").columns.tolist())
+
+    # Дополнительная метрика — любой числовой столбец
+    secondary_metric = st.selectbox(
+        "Дополнительная метрика",
+        df.select_dtypes(include="number").columns.tolist(),
+        index=0
+    )
 
     st.divider()
     if len(selected_stores) == 0:
-        st.warning("Выберите хотя бы одно ТО ↑")
+        st.warning("Выберите хотя бы одно ТО выше.")
 
 
 if len(selected_stores) == 0:
-    st.info("Пожалуйста, выберите хотя бы одно ТО выше.")
+    st.info("Пожалуйста, выберите хотя бы одно ТО в верхней строке для сравнения.")
 else:
     data = df[df["ТО"].isin(selected_stores)]
 
-    st.markdown("---")
-    st.markdown(f"### Сравнение `{selected_metric}` между выбранными ТО")
+    # Среднее по метрике для рекомендаций
+    total_avg = data[selected_metric].mean()
 
-    # KPI‑карточки
+    # KPI и базовые графики
+    st.markdown("---")
+    st.markdown(f"### **Сравнение `{selected_metric}` между выбранными ТО**")
+
+    # KPI‑карточки (с анимацией)
     col1, col2, col3 = st.columns(3)
     total = data[selected_metric].sum()
     avg = data[selected_metric].mean()
@@ -163,11 +272,10 @@ else:
     st.bar_chart(by_store.set_index("ТО"))
 
 
-    # --- Подсказки для каждого ТО ---
+    # --- Подсказки с решениями ---
     st.markdown("---")
-    st.markdown("### 📌 Подсказки и решения")
+    st.markdown("### 📌 Подсказки и решения по метрикам")
 
-    total_avg = data[selected_metric].mean()
     for store in selected_stores:
         store_data = data[data["ТО"] == store]
         value = store_data[selected_metric].sum() if len(store_data) > 0 else 0
