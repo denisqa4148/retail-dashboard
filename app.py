@@ -19,37 +19,76 @@ def load_data():
         st.stop()
 
 
-# --- Стиль — лайтовый, «сайт‑подобный» ---
+# --- Стиль: сайт‑подобный, лайтовый, минималистично ---
 st.markdown("""
 <style>
+    body {
+        margin: 0;
+        padding: 0;
+    }
+
     .stApp {
         background: #ffffff;
         font-family: 'Segoe UI', 'Roboto', sans-serif;
     }
 
-    .section-block {
-        opacity: 0;
-        animation: fadeInSection 0.8s ease-out 0.1s forwards;
-    }
-
-    @keyframes fadeInSection {
-        from { opacity: 0; transform: translateY(12px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .logo {
-        font-size: 36px;
+    /* Лендинг-заголовок */
+    .landing-title {
+        font-size: 40px;
         font-weight: 600;
-        margin-bottom: 20px;
         color: #1976d2;
+        margin-bottom: 10px;
     }
 
-    .subtitle {
+    .landing-subtitle {
         font-size: 18px;
         color: #555;
         margin-bottom: 30px;
     }
 
+    .landing-card {
+        background: #f9f9fb;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        margin-bottom: 24px;
+    }
+
+    .landing-btn {
+        background: #1976d2;
+        color: white;
+        padding: 10px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        margin: 10px auto;
+        width: 240px;
+    }
+
+    .landing-btn:hover {
+        background: #1565c0;
+    }
+
+    /* Панельный блок */
+    .panel-section {
+        background: #f9f9fb;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 24px 0;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .panel-title {
+        font-size: 20px;
+        margin-bottom: 16px;
+        color: #1976d2;
+    }
+
+    /* KPI и метрики */
     .stMetric p {
         font-size: 15px;
         color: #444;
@@ -61,27 +100,17 @@ st.markdown("""
         color: #1976d2;
     }
 
-    .suggestion-box {
-        background: rgba(240, 248, 255, 0.8);
-        padding: 14px;
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        margin: 10px 0;
-        font-size: 14px;
-        color: #333;
-    }
-
-    .suggestion-title {
-        font-weight: 600;
-        color: #1976d2;
-        margin-bottom: 4px;
+    /* Графики */
+    .plotly-graph-div {
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- Загрузка данных (вызываться только в Dashboard) ---
+# --- Загрузка данных (глобально) ---
 df = None
 
 def load_df():
@@ -90,78 +119,127 @@ def load_df():
         df = load_data()
     return df
 
-load_data_for_sidebar = df is None
 
-
-# --- Структура: Landing vs Dashboard ---
-st.markdown("<div class='main-container'>", unsafe_allow_html=True)
-
-
+# --- Страницы приложения ---
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 
 
-# --- Лендинг (страница 1) ---
+# --- Функция подсказок ---
+def generate_insights(metric, value, total_avg, store="ТО", threshold=0.8):
+    insight = f"<div class='landing-card'><div style='font-weight:600;color:#1976d2;'>💡 Рекомендация для ТО: {store}</div>"
+
+    if "Рентабельность 1" in metric or "рентабельность" in metric.lower():
+        if value < total_avg * threshold:
+            insight += "Рентабельность ниже средней. Проверьте себестоимость и расходы на реализацию (ФОТ, логистика, аренда)."
+        else:
+            insight += "Рентабельность в норме. Следите за динамикой и структурой продаж."
+
+    elif "Выручка" in metric:
+        if value < total_avg * threshold:
+            insight += "Выручка ниже средней. Проверьте трафик, конверсию и средний чек, возможно, снижение посещений или промо‑активности."
+        else:
+            insight += "Выручка в норме. Следите за маржой и ценовой политикой, чтобы не снижать рентабельность."
+
+    elif "ФОТ" in metric:
+        if value > total_avg * 1.2:
+            insight += "Доля ФОТ в выручке завышена. Проверьте численность персонала, часы работы и KPI‑магазина."
+        else:
+            insight += "ФОТ в допустимом диапазоне. Следите, чтобы расходы росли не быстрее выручки."
+
+    elif "Марж" in metric:
+        if value < total_avg * threshold:
+            insight += "Маржинальная прибыль ниже средней. Сравните доли проды, скоропорта и непроды — возможно, низкомаржинальные группы доминируют."
+        else:
+            insight += "Маржинальная прибыль в норме. Следите за списаниями и структурой закупок."
+
+    else:
+        insight += "Метрика в норме. Следите за динамикой по месяцам и сравнением с другими ТО."
+
+    insight += "</div>"
+    return insight
+
+
+# === ЛЕНДИНГ ===
 if st.session_state.page == "landing":
-    st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-    st.markdown("<div class='logo'>📊 Розничная сеть «ТО»</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>Автоматизированная аналитическая платформа для управления торговой сетью</div>", unsafe_allow_html=True)
+    st.markdown("""
+        <div class='landing-card'>
+            <div class='landing-title'>📊 Розничная сеть «ТО»</div>
+            <div class='landing-subtitle'>
+                Анализ выручки, маржи, рентабельности и эффективности торговых объектов в одной панели
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("### Возможности:")
-    st.write("""
-    - **Обзор сети** по выручке, марже и рентабельности  
-    - **Динамика по месяцам**  
-    - **Сравнение ТО** и **детализация по конкретному магазину**  
-    - **Интеллектуальные рекомендации** по метрикам
-    """)
+    st.markdown("""
+        <div class='landing-card'>
+            <h3>🎯 Ключевые возможности</h3>
+            <p>
+                <b>Обзор сети:</b> выручка, маржа и рентабельность по сети в целом.<br>
+                <b>Динамика по месяцам:</b> изменения важнейших метрик по времени.<br>
+                <b>Сравнение ТО:</b> выявляйте лучшие и проблемные торговые объекты.<br>
+                <b>Интеллектуальные рекомендации:</b> предлагаем направления улучшения по каждому показателю.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.button("👉 Войти в дашборд", key="to_dashboard", on_click=lambda: st.session_state.update(page="dashboard"))
+    st.markdown("""
+        <div class='landing-card'>
+            <h3>👥 Для кого это</h3>
+            <p>
+                Для руководителей торговых сетей, руководителей регионов и директоров по аналитике.<br>
+                Помогает принимать решения по структуре сети, мерчандайзингу, персоналу и маркетингу.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    with col2:
-        st.button("📩 Связаться с аналитиком", key="to_contact")
-        if st.session_state.get("to_contact"):
-            st.write("Свяжитесь с коммерческим/маркетинговым отделом для доступа к системе.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    # --- Кнопка Войти в Analytics ===
+    st.markdown("""
+        <div style='text-align:center; margin-top:40px;'>
+            <div class='landing-btn' onclick='location.reload()' style='cursor:pointer;' id='btn-analyze'>Войти в Analytics</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("➡️ Войти в Analytics (Streamlit‑кнопка)", key="nav_analytics"):
+        st.session_state.page = "analytics"
+        st.rerun()
 
 
-# --- Dashboards (страница 2) ---
-elif st.session_state.page == "dashboard":
+# === АНАЛИТИЧЕСКИЙ ПАНЕЛЬНЫЙ ИНТЕРФЕЙС ===
+elif st.session_state.page == "analytics":
     df = load_df()
+    metrics_list = ["Выручка б/НДС", "Себестоимость б/ндс", "Марж прибыль", "Рентабельность 1", "Доля ФОТ в выручке, %"]
 
-    # --- Выбор панели (как в сайтовой навигации) ---
-    st.sidebar.markdown("<div class='section-block'>", unsafe_allow_html=True)
-    st.sidebar.markdown("### 🎯 Панель данных")
-    panel_options = [
-        "📈 Обзор сети",
-        "📉 Динамика по месяцам",
-        "📊 Сравнение ТО",
-        "🔍 Детализация по ТО",
-        "💡 Рекомендации"
-    ]
-    selected_panel = st.sidebar.radio("**Выберите раздел**", panel_options, index=0)
 
-    # --- Фильтры ---
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ⚙️ Фильтры", unsafe_allow_html=True)
+    # --- Боковая панель — как навигация сайта ---
+    with st.sidebar:
+        st.markdown("<h3 style='color:#1976d2;'>🎯 Панель BI</h3>", unsafe_allow_html=True)
+        nav_options = ["📊 Обзор сети", "📉 Динамика", "🌍 Сравнение ТО", "💡 Рекомендации"]
+        selected_nav = st.radio("Раздел", nav_options)
 
-    all_stores = sorted(df["ТО"].dropna().unique().tolist())
-    selected_stores = st.sidebar.multiselect("ТО", all_stores, default=all_stores[:3] if all_stores else [])
+        st.divider()
+        st.markdown("### ⚙️ Фильтры", unsafe_allow_html=True)
 
-    months = sorted(df["Месяц"].dropna().unique().tolist())
-    selected_month = st.sidebar.selectbox("Месяц", ["Все"] + months)
+        all_stores = sorted(df["ТО"].dropna().unique().tolist())
+        selected_stores = st.multiselect("ТО", all_stores, default=all_stores[:3] if all_stores else [])
 
-    placements = sorted(df["Размещение"].dropna().unique().tolist())
-    selected_placement = st.sidebar.selectbox("Размещение", ["Все"] + placements)
+        months = sorted(df["Месяц"].dropna().unique().tolist())
+        selected_month = st.selectbox("Месяц", ["Все"] + months)
 
-    types = sorted(df["Тип ТО"].dropna().unique().tolist())
-    selected_type = st.sidebar.selectbox("Тип ТО", ["Все"] + types)
+        placements = sorted(df["Размещение"].dropna().unique().tolist())
+        selected_placement = st.selectbox("Размещение", ["Все"] + placements)
 
-    st.sidebar.markdown("</div>", unsafe_allow_html=True)
+        types = sorted(df["Тип ТО"].dropna().unique().tolist())
+        selected_type = st.selectbox("Тип ТО", ["Все"] + types)
 
-    # --- Фильтрация ---
+        # Кнопка назад
+        if st.button("⬅️ Назад на лендинг", key="back_to_landing"):
+            st.session_state.page = "landing"
+            st.rerun()
+
+
+    # --- Фильтрация данных ---
     data = df.copy()
     if len(selected_stores) > 0:
         data = data[data["ТО"].isin(selected_stores)]
@@ -173,73 +251,37 @@ elif st.session_state.page == "dashboard":
         data = data[data["Тип ТО"] == selected_type]
 
 
-    # --- Функция подсказок ---
-    def generate_insights(metric, value, total_avg, store="ТО", threshold=0.8):
-        insight = f"<div class='suggestion-box'><div class='suggestion-title'>💡 Рекомендация для ТО: {store}</div>"
-
-        if "Рентабельность 1" in metric or "рентабельность" in metric.lower():
-            if value < total_avg * threshold:
-                insight += "Рентабельность ниже средней. Проверьте себестоимость и расходы."
-            else:
-                insight += "Рентабельность в норме. Следите за динамикой."
-
-        elif "Выручка" in metric:
-            if value < total_avg * threshold:
-                insight += "Выручка ниже средней. Проверьте трафик и конверсию."
-            else:
-                insight += "Выручка в норме. Следите за маржой."
-
-        elif "ФОТ" in metric:
-            if value > total_avg * 1.2:
-                insight += "ФОТ завышен. Проверьте численность персонала и часы работы."
-            else:
-                insight += "ФОТ в допустимом диапазоне."
-
-        elif "Марж" in metric:
-            if value < total_avg * threshold:
-                insight += "Маржинальная прибыль ниже средней. Сравните структуру товарных групп."
-            else:
-                insight += "Маржинальная прибыль в норме."
-
-        else:
-            insight += "Метрика в норме. Следите за динамикой."
-
-        insight += "</div>"
-        return insight
-
-
     # --- Панель 1: Обзор сети ---
-    if selected_panel == "📈 Обзор сети":
-        st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Обзор сети по выбранным ТО")
+    if selected_nav == "📊 Обзор сети":
+        st.markdown("<div class='panel-section'><div class='panel-title'>📊 Обзор сети</div>", unsafe_allow_html=True)
 
         if len(data) == 0:
             st.info("Нет данных по выбранным фильтрам.")
         else:
-            metrics = ["Выручка б/НДС", "Себестоимость б/ндс", "Марж прибыль", "Рентабельность 1", "Доля ФОТ в выручке, %"]
-            total = data[metrics[0]].sum()
-            total_avg = data[metrics[0]].mean()
+            total = data[metrics_list[0]].sum()
+            total_avg = data[metrics_list[0]].mean()
 
             col1, col2, col3 = st.columns(3)
             col1.metric("Суммарная выручка", f"{total:,.2f}")
-            col2.metric("Средняя по ТО", f"{total_avg:,.2f}")
+            col2.metric("Средняя выручка на ТО", f"{total_avg:,.2f}")
             col3.metric("Количество ТО", f"{len(data['ТО'].unique())}")
 
-            by_store = data.groupby("ТО", as_index=False)[metrics[0]].sum()
+            st.markdown("---")
+
+            by_store = data.groupby("ТО", as_index=False)[metrics_list[0]].sum()
             st.bar_chart(by_store.set_index("ТО"))
 
         st.markdown("</div>", unsafe_allow_html=True)
 
 
     # --- Панель 2: Динамика по месяцам ---
-    if selected_panel == "📉 Динамика по месяцам":
-        st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-        st.markdown("### 📈 Динамика по месяцам")
+    if selected_nav == "📉 Динамика":
+        st.markdown("<div class='panel-section'><div class='panel-title'>📈 Динамика по месяцам</div>", unsafe_allow_html=True)
 
         if len(data) == 0:
             st.info("Нет данных по выбранным фильтрам.")
         else:
-            metric = st.selectbox("Метрика", metrics, key="dyn_metric")
+            metric = st.selectbox("Метрика", metrics_list, key="dyn_metric")
             by_month = data.groupby("Месяц", as_index=False)[metric].sum()
             st.line_chart(by_month.set_index("Месяц"))
 
@@ -247,68 +289,35 @@ elif st.session_state.page == "dashboard":
 
 
     # --- Панель 3: Сравнение ТО ---
-    if selected_panel == "📊 Сравнение ТО":
-        st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Сравнение выбранных ТО")
+    if selected_nav == "🌍 Сравнение ТО":
+        st.markdown("<div class='panel-section'><div class='panel-title'>🗺️ Сравнение выбранных ТО</div>", unsafe_allow_html=True)
 
         if len(data) == 0:
             st.info("Нет данных по выбранным фильтрам.")
         else:
-            selected_metric = st.selectbox("Метрика", metrics, key="comp_metric")
+            selected_metric = st.selectbox("Метрика", metrics_list, key="comp_metric")
             by_store = data.groupby("ТО", as_index=False)[selected_metric].sum()
             st.bar_chart(by_store.set_index("ТО"))
 
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-    # --- Панель 4: Детализация по ТО ---
-    if selected_panel == "🔍 Детализация по ТО":
-        st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-        st.markdown("### 🔍 Детализация по одному ТО")
-
-        if len(data) == 0:
-            st.info("Нет данных по выбранным фильтрам.")
-        else:
-            selected_store = st.selectbox("ТО", all_stores, key="detail_store")
-            store_data = data[data["ТО"] == selected_store]
-
-            if len(store_data) == 0:
-                st.info("Нет данных для этого ТО.")
-            else:
-                st.dataframe(store_data[["Месяц"] + metrics].round(2), height=400)
-
-                st.markdown("---")
-
-                total_avg = store_data["Выручка б/НДС"].mean()
-                for metric in ["Выручка б/НДС", "Рентабельность 1", "Марж прибыль"]:
-                    value = store_data[metric].sum()
-                    st.markdown(
-                        generate_insights(metric, value, total_avg, selected_store),
-                        unsafe_allow_html=True
-                    )
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-    # --- Панель 5: Рекомендации ---
-    if selected_panel == "💡 Рекомендации":
-        st.markdown("<div class='section-block'>", unsafe_allow_html=True)
-        st.markdown("### 💡 Рекомендации по метрикам")
+    # --- Панель 4: Рекомендации ---
+    if selected_nav == "💡 Рекомендации":
+        st.markdown("<div class='panel-section'><div class='panel-title'>💡 Рекомендации по метрикам</div>", unsafe_allow_html=True)
 
         if len(selected_stores) == 0:
-            st.info("Выберите хотя бы одно ТО.")
+            st.info("Выберите хотя бы одно ТО в боковой панели.")
         else:
-            metric = st.selectbox("Метрика", metrics, key="rec_metric")
-            total_avg = data[metric].mean()
+            selected_metric = st.selectbox("Метрика", metrics_list, key="rec_metric")
+            total_avg = data[selected_metric].mean()
 
             for store in selected_stores:
                 store_data = data[data["ТО"] == store]
-                value = store_data[metric].sum() if len(store_data) > 0 else 0
+                value = store_data[selected_metric].sum() if len(store_data) > 0 else 0
                 st.markdown(
-                    generate_insights(metric, value, total_avg, store),
+                    generate_insights(selected_metric, value, total_avg, store),
                     unsafe_allow_html=True
                 )
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-st.markdown("</div>", unsafe_allow_html=True)
